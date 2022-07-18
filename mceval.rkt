@@ -30,6 +30,8 @@
         ((begin? exp)
          (eval-sequence (begin-actions exp) env))
         ((cond? exp) (mceval (cond->if exp) env))
+        ((let? exp)
+         (mceval (let->definition exp) env))
         ((application? exp)
          (mcapply (mceval (operator exp) env)
                   (list-of-values (operands exp) env)))
@@ -38,7 +40,9 @@
 
 (define (mcapply procedure arguments)
   (cond ((primitive-procedure? procedure)
-         (apply-primitive-procedure procedure arguments))
+         (if (no-operands? arguments)
+             (error "Metacircular Interpreter Aborted")
+             (apply-primitive-procedure procedure arguments)))
         ((compound-procedure? procedure)
          (eval-sequence
            (procedure-body procedure)
@@ -145,7 +149,6 @@
 (define (make-if predicate consequent alternative)
   (list 'if predicate consequent alternative))
 
-
 (define (begin? exp) (tagged-list? exp 'begin))
 
 (define (begin-actions exp) (cdr exp))
@@ -161,7 +164,6 @@
 
 (define (make-begin seq) (cons 'begin seq))
 
-
 (define (application? exp) (pair? exp))
 (define (operator exp) (car exp))
 (define (operands exp) (cdr exp))
@@ -169,7 +171,6 @@
 (define (no-operands? ops) (null? ops))
 (define (first-operand ops) (car ops))
 (define (rest-operands ops) (cdr ops))
-
 
 (define (cond? exp) (tagged-list? exp 'cond))
 
@@ -198,6 +199,21 @@
             (make-if (cond-predicate first)
                      (sequence->exp (cond-actions first))
                      (expand-clauses rest))))))
+
+(define (make-define seq) (cons 'define seq))
+
+(define (let? exp) (tagged-list? exp 'let))
+
+(define (let-def exp) (map car (cadr exp)))
+
+(define (let-values exp) (map cadr (cadr exp)))
+
+(define (let-body exp) (cddr exp))
+
+(define (make-let seq) (cons 'let seq))
+
+(define (let->definition exp)
+  (cons (make-lambda (let-def exp) (let-body exp)) (let-values exp)))
 
 ;;;SECTION 4.1.3
 
@@ -293,6 +309,8 @@
                              the-empty-environment)))
     (define-variable! 'true true initial-env)
     (define-variable! 'false false initial-env)
+    (eval-definition '(define (and x y) (if x (if y true false) false)) initial-env)
+    (eval-definition '(define (or x y) (if x true (if y true false))) initial-env)
     initial-env))
 
 (define (primitive-procedure? proc)
@@ -305,7 +323,16 @@
         (list 'cdr cdr)
         (list 'cons cons)
         (list 'null? null?)
-;;      more primitives
+        (list '+ +)
+        (list '* *)
+        (list '- -)
+        (list '/ /)
+        (list '< <)
+        (list '<= <=)
+        (list '= =)
+        (list '>= >=)
+        (list '> >)
+        (list 'error error)
         ))
 
 (define (primitive-procedure-names)
